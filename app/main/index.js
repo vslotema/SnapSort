@@ -110,6 +110,30 @@ ipcMain.handle('scan-folder', async (event, folderPath) => {
 });
 
 /**
+ * Get image thumbnail as base64
+ */
+ipcMain.handle('get-image-thumbnail', async (event, filePath) => {
+  try {
+    const fs = require('fs').promises;
+    const imageBuffer = await fs.readFile(filePath);
+    const base64Image = imageBuffer.toString('base64');
+    const mime = require('mime-types');
+    const mimeType = mime.lookup(filePath) || 'image/jpeg';
+
+    return {
+      success: true,
+      dataUrl: `data:${mimeType};base64,${base64Image}`
+    };
+  } catch (error) {
+    console.error('Error loading image:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+});
+
+/**
  * Get preview state
  */
 ipcMain.handle('get-preview-state', async () => {

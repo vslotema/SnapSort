@@ -17,8 +17,16 @@
         ></vue-feather>
         <span v-else class="chevron-spacer"></span>
 
-        <!-- Icon based on type -->
+        <!-- Image thumbnail for image files -->
+        <v-img
+          v-if="isImage() && imageSrc"
+          :src="imageSrc"
+          class="file-thumbnail mr-2"
+          @error="handleImageError"
+        />
+        <!-- Icon based on type for non-images -->
         <vue-feather
+          v-else
           :type="getIcon()"
           size="16"
           :stroke="getColor()"
@@ -81,9 +89,42 @@ const emit = defineEmits(['select']);
 
 const expanded = ref(props.level === 0); // Auto-expand root level
 const selected = ref(false);
+const imageError = ref(false);
+const imageSrc = ref(null);
 
 function toggleExpand() {
   expanded.value = !expanded.value;
+}
+
+function isImage() {
+  const mime = props.node.mimeType || '';
+  return mime.startsWith('image/') && !imageError.value;
+}
+
+async function loadImageThumbnail() {
+  if (!isImage() || !props.node.path) return;
+
+  try {
+    const result = await window.snapSortAPI.getImageThumbnail(props.node.path);
+    if (result.success) {
+      imageSrc.value = result.dataUrl;
+    } else {
+      imageError.value = true;
+    }
+  } catch (error) {
+    console.error('Error loading thumbnail:', error);
+    imageError.value = true;
+  }
+}
+
+function handleImageError() {
+  // Fall back to icon if image fails to load
+  imageError.value = true;
+}
+
+// Load thumbnail when component mounts if it's an image
+if (isImage()) {
+  loadImageThumbnail();
 }
 
 function handleClick() {
@@ -143,5 +184,11 @@ function formatSize(bytes) {
 
 .cursor-pointer {
   cursor: pointer;
+}
+
+.file-thumbnail {
+  width: 24px;
+  height: 24px;
+  object-fit: cover;
 }
 </style>
