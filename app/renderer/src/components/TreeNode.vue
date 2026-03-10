@@ -7,6 +7,14 @@
       density="compact"
     >
       <template v-slot:prepend>
+        <!-- Drag handle -->
+        <vue-feather
+          type="menu"
+          size="14"
+          class="drag-handle mr-1"
+          style="cursor: grab; color: #999;"
+        ></vue-feather>
+
         <!-- Chevron for folders with children -->
         <vue-feather
           v-if="node.type === 'folder' && node.children?.length > 0"
@@ -59,20 +67,29 @@
     </v-list-item>
 
     <!-- Render children recursively if expanded -->
-    <div v-if="expanded && node.children">
-      <tree-node
-        v-for="child in node.children"
-        :key="child.id"
-        :node="child"
-        :level="level + 1"
-        @select="$emit('select', $event)"
-      />
-    </div>
+    <draggable
+      v-if="expanded && node.children && node.type === 'folder'"
+      v-model="node.children"
+      item-key="id"
+      group="files"
+      @change="handleDragChange"
+      ghost-class="ghost"
+      handle=".drag-handle"
+    >
+      <template #item="{ element }">
+        <tree-node
+          :node="element"
+          :level="level + 1"
+          @select="$emit('select', $event)"
+        />
+      </template>
+    </draggable>
   </div>
 </template>
 
 <script setup>
 import { ref, defineProps, defineEmits } from 'vue';
+import draggable from 'vuedraggable';
 
 const props = defineProps({
   node: {
@@ -120,6 +137,76 @@ async function loadImageThumbnail() {
 function handleImageError() {
   // Fall back to icon if image fails to load
   imageError.value = true;
+}
+
+function handleDragChange(event) {
+  console.log('Drag change:', event);
+  // The children array is already updated by v-model
+  // We could emit an event to save the new order if needed
+}
+
+// Drag and drop handlers
+function handleDragStart(event) {
+  isDragging.value = true;
+  event.dataTransfer.effectAllowed = 'move';
+  event.dataTransfer.setData('application/json', JSON.stringify({
+    nodeId: props.node.id,
+    nodePath: props.node.path,
+    nodeType: props.node.type,
+    nodeName: props.node.name
+  }));
+}
+
+function handleDragEnd() {
+  isDragging.value = false;
+}
+
+function handleDragOver(event) {
+  // Only allow dropping on folders
+  if (props.node.type === 'folder') {
+    isDragOver.value = true;
+    event.dataTransfer.dropEffect = 'move';
+  }
+}
+
+function handleDragLeave() {
+  isDragOver.value = false;
+}
+
+async function handleDrop(event) {
+  isDragOver.value = false;
+
+  // Only allow dropping on folders
+  if (props.node.type !== 'folder') {
+    return;
+  }
+
+  try {
+    const data = JSON.parse(event.dataTransfer.getData('application/json'));
+
+    // Don't allow dropping on itself
+    if (data.nodeId === props.node.id) {
+      return;
+    }
+
+    // Don't allow dropping a folder into its own child
+    if (props.node.path.startsWith(data.nodePath + '/')) {
+      alert('Cannot move a folder into its own subfolder');
+      return;
+    }
+
+    // Emit move event to parent
+    emit('move-node', {
+      sourceId: data.nodeId,
+      sourcePath: data.nodePath,
+      sourceType: data.nodeType,
+      sourceName: data.nodeName,
+      targetId: props.node.id,
+      targetPath: props.node.path
+    });
+  } catch (error) {
+    console.error('Error handling drop:', error);
+  }
 }
 
 // Load thumbnail when component mounts if it's an image
@@ -190,5 +277,25 @@ function formatSize(bytes) {
   width: 24px;
   height: 24px;
   object-fit: cover;
+}
+
+/* Drag and drop styles */
+.drag-handle {
+  opacity: 0.3;
+  transition: opacity 0.2s;
+}
+
+.drag-handle:hover {
+  opacity: 1;
+  cursor: grab;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.ghost {
+  opacity: 0.5;
+  background: #f0f0f0;
 }
 </style>

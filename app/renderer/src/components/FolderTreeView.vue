@@ -15,7 +15,7 @@
     <v-divider></v-divider>
     <v-card-text class="pa-0 tree-container">
       <v-list v-if="rootNode" density="compact" class="pa-0">
-        <tree-node :node="rootNode" :level="0" @select="handleSelect" />
+        <tree-node :node="rootNode" :level="0" @select="handleSelect" @move-node="handleMoveNode" />
       </v-list>
       <div v-else class="text-center pa-8">
         <vue-feather type="folder" size="48" stroke="lightgrey"></vue-feather>
@@ -75,6 +75,49 @@ async function handleOrganizationApplied() {
     } catch (error) {
       console.error('Error rescanning folder:', error);
     }
+  }
+}
+
+async function handleMoveNode(moveData) {
+  const path = require('path');
+  const newPath = path.join(moveData.targetPath, moveData.sourceName);
+
+  const confirmed = confirm(`Move "${moveData.sourceName}" to "${moveData.targetPath}"?`);
+  if (!confirmed) return;
+
+  try {
+    // Add move action to the organization engine
+    await window.snapSortAPI.addAction({
+      type: 'move',
+      fileId: moveData.sourceId,
+      params: {
+        originalPath: moveData.sourcePath,
+        newPath: newPath
+      },
+      metadata: {
+        reason: 'manual_drag_drop'
+      }
+    });
+
+    // Apply the changes immediately
+    const result = await window.snapSortAPI.applyChanges();
+
+    if (result.success) {
+      // Rescan to refresh the tree
+      const rootFolder = appStore.rootFolder;
+      if (rootFolder) {
+        const scanResult = await window.snapSortAPI.scanFolder(rootFolder);
+        if (scanResult.success) {
+          appStore.setRootNode(scanResult.rootNode);
+          appStore.setStats(scanResult.stats);
+        }
+      }
+    } else {
+      alert(`Error moving file: ${result.error}`);
+    }
+  } catch (error) {
+    console.error('Error moving node:', error);
+    alert(`Error: ${error.message}`);
   }
 }
 </script>
