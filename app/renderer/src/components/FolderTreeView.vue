@@ -23,6 +23,20 @@
       </div>
     </v-card-text>
 
+    <!-- Fixed Apply Changes Button -->
+    <v-btn
+      v-if="rootNode"
+      color="success"
+      size="large"
+      class="apply-changes-btn"
+      @click="applyAllChanges"
+      rounded="pill"
+      elevation="4"
+    >
+      <vue-feather type="check" size="20" class="mr-2"></vue-feather>
+      Apply Changes
+    </v-btn>
+
     <!-- Organization Settings Dialog -->
     <OrganizationSettings
       :show="showOrganizeDialog"
@@ -83,7 +97,7 @@ async function handleMoveNode(moveData) {
   const newPath = `${moveData.targetPath}/${moveData.sourceName}`;
 
   try {
-    // Add move action to the organization engine
+    // Queue the move action (don't apply yet)
     await window.snapSortAPI.addAction({
       type: 'move',
       fileId: moveData.sourceId,
@@ -92,28 +106,39 @@ async function handleMoveNode(moveData) {
         newPath: newPath
       },
       metadata: {
-        reason: 'manual_drag_drop'
+        reason: 'manual_drag_drop',
+        newIndex: moveData.newIndex
       }
     });
 
-    // Apply the changes immediately
+    console.log(`Queued move: ${moveData.sourceName} -> ${moveData.targetPath}`);
+  } catch (error) {
+    console.error('Error queuing move action:', error);
+    alert(`Error: ${error.message}`);
+  }
+}
+
+async function applyAllChanges() {
+  try {
+    // Apply all queued changes to the file system
     const result = await window.snapSortAPI.applyChanges();
 
-    if (!result.success) {
-      alert(`Error moving file: ${result.error}`);
-      // Rescan only on error to revert the UI
+    if (result.success) {
+      // Rescan to refresh the tree with actual file system state
       const rootFolder = appStore.rootFolder;
       if (rootFolder) {
         const scanResult = await window.snapSortAPI.scanFolder(rootFolder);
         if (scanResult.success) {
           appStore.setRootNode(scanResult.rootNode);
           appStore.setStats(scanResult.stats);
+          console.log('All changes applied successfully');
         }
       }
+    } else {
+      alert(`Error applying changes: ${result.error}`);
     }
-    // On success, don't rescan - keep the visual order from vuedraggable
   } catch (error) {
-    console.error('Error moving node:', error);
+    console.error('Error applying changes:', error);
     alert(`Error: ${error.message}`);
   }
 }
@@ -123,5 +148,16 @@ async function handleMoveNode(moveData) {
 .tree-container {
   height: calc(100vh - 120px);
   overflow-y: auto;
+}
+
+.apply-changes-btn {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 100;
+  padding: 12px 32px !important;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0.5px;
 }
 </style>
