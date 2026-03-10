@@ -79,11 +79,8 @@ async function handleOrganizationApplied() {
 }
 
 async function handleMoveNode(moveData) {
-  const path = require('path');
-  const newPath = path.join(moveData.targetPath, moveData.sourceName);
-
-  const confirmed = confirm(`Move "${moveData.sourceName}" to "${moveData.targetPath}"?`);
-  if (!confirmed) return;
+  // Construct the new path by joining target folder path with the source name
+  const newPath = `${moveData.targetPath}/${moveData.sourceName}`;
 
   try {
     // Add move action to the organization engine
@@ -102,8 +99,9 @@ async function handleMoveNode(moveData) {
     // Apply the changes immediately
     const result = await window.snapSortAPI.applyChanges();
 
-    if (result.success) {
-      // Rescan to refresh the tree
+    if (!result.success) {
+      alert(`Error moving file: ${result.error}`);
+      // Rescan only on error to revert the UI
       const rootFolder = appStore.rootFolder;
       if (rootFolder) {
         const scanResult = await window.snapSortAPI.scanFolder(rootFolder);
@@ -112,9 +110,8 @@ async function handleMoveNode(moveData) {
           appStore.setStats(scanResult.stats);
         }
       }
-    } else {
-      alert(`Error moving file: ${result.error}`);
     }
+    // On success, don't rescan - keep the visual order from vuedraggable
   } catch (error) {
     console.error('Error moving node:', error);
     alert(`Error: ${error.message}`);

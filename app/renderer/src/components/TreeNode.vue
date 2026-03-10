@@ -1,7 +1,9 @@
 <template>
   <div>
     <v-list-item
-      :class="{ 'node-selected': selected }"
+      :class="{
+        'node-selected': selected
+      }"
       @click="handleClick"
       :style="{ paddingLeft: `${level * 16 + 8}px` }"
       density="compact"
@@ -68,19 +70,20 @@
 
     <!-- Render children recursively if expanded -->
     <draggable
-      v-if="expanded && node.children && node.type === 'folder'"
+      v-if="expanded && node.children"
       v-model="node.children"
+      group="tree-nodes"
       item-key="id"
-      group="files"
-      @change="handleDragChange"
-      ghost-class="ghost"
       handle=".drag-handle"
+      @change="handleDragChange"
+      :animation="200"
     >
       <template #item="{ element }">
         <tree-node
           :node="element"
           :level="level + 1"
           @select="$emit('select', $event)"
+          @move-node="$emit('move-node', $event)"
         />
       </template>
     </draggable>
@@ -88,7 +91,7 @@
 </template>
 
 <script setup>
-import { ref, defineProps, defineEmits } from 'vue';
+import { ref } from 'vue';
 import draggable from 'vuedraggable';
 
 const props = defineProps({
@@ -102,7 +105,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['select']);
+const emit = defineEmits(['select', 'move-node']);
 
 const expanded = ref(props.level === 0); // Auto-expand root level
 const selected = ref(false);
@@ -139,73 +142,34 @@ function handleImageError() {
   imageError.value = true;
 }
 
+// Drag and drop handler for vuedraggable
 function handleDragChange(event) {
-  console.log('Drag change:', event);
-  // The children array is already updated by v-model
-  // We could emit an event to save the new order if needed
-}
+  console.log('Drag change event:', event);
 
-// Drag and drop handlers
-function handleDragStart(event) {
-  isDragging.value = true;
-  event.dataTransfer.effectAllowed = 'move';
-  event.dataTransfer.setData('application/json', JSON.stringify({
-    nodeId: props.node.id,
-    nodePath: props.node.path,
-    nodeType: props.node.type,
-    nodeName: props.node.name
-  }));
-}
+  // event.added: element was added to this folder from another folder
+  // event.moved: element was reordered within this folder
+  // event.removed: element was removed from this folder to another
 
-function handleDragEnd() {
-  isDragging.value = false;
-}
+  if (event.added) {
+    // An item was moved into this folder from another folder
+    const movedItem = event.added.element;
+    console.log('Item added to folder:', movedItem.name, 'to', props.node.name);
 
-function handleDragOver(event) {
-  // Only allow dropping on folders
-  if (props.node.type === 'folder') {
-    isDragOver.value = true;
-    event.dataTransfer.dropEffect = 'move';
-  }
-}
-
-function handleDragLeave() {
-  isDragOver.value = false;
-}
-
-async function handleDrop(event) {
-  isDragOver.value = false;
-
-  // Only allow dropping on folders
-  if (props.node.type !== 'folder') {
-    return;
-  }
-
-  try {
-    const data = JSON.parse(event.dataTransfer.getData('application/json'));
-
-    // Don't allow dropping on itself
-    if (data.nodeId === props.node.id) {
-      return;
-    }
-
-    // Don't allow dropping a folder into its own child
-    if (props.node.path.startsWith(data.nodePath + '/')) {
-      alert('Cannot move a folder into its own subfolder');
-      return;
-    }
-
-    // Emit move event to parent
+    // Emit event to parent to handle the cross-folder move
     emit('move-node', {
-      sourceId: data.nodeId,
-      sourcePath: data.nodePath,
-      sourceType: data.nodeType,
-      sourceName: data.nodeName,
+      sourceId: movedItem.id,
+      sourcePath: movedItem.path,
+      sourceType: movedItem.type,
+      sourceName: movedItem.name,
       targetId: props.node.id,
-      targetPath: props.node.path
+      targetPath: props.node.path,
+      newIndex: event.added.newIndex
     });
-  } catch (error) {
-    console.error('Error handling drop:', error);
+  } else if (event.moved) {
+    // An item was reordered within this folder
+    console.log('Item reordered within folder:', props.node.name);
+    // For now, we just log it. The order change is already reflected in node.children
+    // When user hits "apply", we can process this reordering if needed
   }
 }
 
@@ -294,8 +258,9 @@ function formatSize(bytes) {
   cursor: grabbing;
 }
 
-.ghost {
+/* vuedraggable ghost class for dragging visual feedback */
+:deep(.sortable-ghost) {
   opacity: 0.5;
-  background: #f0f0f0;
+  background: rgba(25, 118, 210, 0.1);
 }
 </style>
