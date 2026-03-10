@@ -1,0 +1,34 @@
+# Node
+node_modules/
+package-lock.json
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+venv/
+*.egg-info/
+
+# Build
+app/renderer/dist/
+out/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# Database/Cache
+*.db
+*.sqlite
+.cache/
+models/cache/
