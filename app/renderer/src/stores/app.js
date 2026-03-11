@@ -11,6 +11,7 @@ export const useAppStore = defineStore('app', () => {
   });
   const previewTree = ref([]);
   const actions = ref([]);
+  const selectedNodes = ref(new Set());
 
   function setRootFolder(folder) {
     rootFolder.value = folder;
@@ -46,18 +47,48 @@ export const useAppStore = defineStore('app', () => {
     stats.value.pendingActions = 0;
   }
 
+  function toggleNodeSelection(nodeId, ctrlKey = false) {
+    if (ctrlKey) {
+      // Toggle selection with Ctrl/Cmd
+      if (selectedNodes.value.has(nodeId)) {
+        selectedNodes.value.delete(nodeId);
+      } else {
+        selectedNodes.value.add(nodeId);
+      }
+    } else {
+      // Single selection without Ctrl/Cmd - clear others
+      selectedNodes.value.clear();
+      selectedNodes.value.add(nodeId);
+    }
+    // Trigger reactivity
+    selectedNodes.value = new Set(selectedNodes.value);
+  }
+
+  function clearSelection() {
+    selectedNodes.value.clear();
+    selectedNodes.value = new Set(selectedNodes.value);
+  }
+
+  function isNodeSelected(nodeId) {
+    return selectedNodes.value.has(nodeId);
+  }
+
   return {
     rootFolder,
     rootNode,
     stats,
     previewTree,
     actions,
+    selectedNodes,
     setRootFolder,
     setRootNode,
     setStats,
     setPreviewTree,
     addAction,
     removeAction,
-    clearActions
+    clearActions,
+    toggleNodeSelection,
+    clearSelection,
+    isNodeSelected
   };
 });

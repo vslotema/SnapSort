@@ -2,9 +2,10 @@
   <div>
     <v-list-item
       :class="{
-        'node-selected': selected
+        'node-selected': isSelected
       }"
-      @click="handleClick"
+      :data-node-id="node.id"
+      @click="handleClick($event)"
       :style="{ paddingLeft: `${level * 16 + 8}px` }"
       density="compact"
     >
@@ -75,8 +76,13 @@
       group="tree-nodes"
       item-key="id"
       handle=".drag-handle"
-      @change="handleDragChange"
+      ghost-class="ghost"
+      drag-class="dragging"
+      multi-drag
       :animation="200"
+      @change="handleDragChange"
+      @start="handleDragStart"
+      @end="handleDragEnd"
     >
       <template #item="{ element }">
         <tree-node
@@ -91,8 +97,15 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, computed, inject } from 'vue';
 import draggable from 'vuedraggable';
+
+// Inject selection state from parent
+const selectedNodes = inject('selectedNodes', ref(new Set()));
+const draggedItems = inject('draggedItems', ref([]));
+const getRootNode = inject('rootNodeRef', () => null);
+const toggleSelection = inject('toggleSelection', () => {});
+const clearSelection = inject('clearSelection', () => {});
 
 const props = defineProps({
   node: {
@@ -108,9 +121,10 @@ const props = defineProps({
 const emit = defineEmits(['select', 'move-node']);
 
 const expanded = ref(props.level === 0); // Auto-expand root level
-const selected = ref(false);
 const imageError = ref(false);
 const imageSrc = ref(null);
+
+const isSelected = computed(() => selectedNodes.value.has(props.node.id));
 
 function toggleExpand() {
   expanded.value = !expanded.value;
@@ -142,35 +156,122 @@ function handleImageError() {
   imageError.value = true;
 }
 
+// Track items being dragged
+function handleDragStart(event) {
+  const draggedIndex = event.oldIndex;
+  const draggedNode = props.node.children[draggedIndex];
+
+  if (!draggedNode) {
+    console.error('Could not find dragged node');
+    return;
+  }
+
+  const draggedItemId = draggedNode.id;
+  const selectedIds = Array.from(selectedNodes.value);
+
+  // If the dragged item is selected and there are multiple selections
+  if (selectedIds.includes(draggedItemId) && selectedIds.length > 1) {
+    // Store all selected items for later
+    const rootNode = getRootNode();
+    draggedItems.value = selectedIds.map(id => {
+      const node = findNodeInTree(rootNode, id);
+      return node;
+    }).filter(Boolean);
+  } else {
+    // Single item drag
+    draggedItems.value = [draggedNode];
+  }
+}
+
+function handleDragEnd(event) {
+  // Clear dragged items after drop
+  draggedItems.value = [];
+}
+
 // Drag and drop handler for vuedraggable
 function handleDragChange(event) {
-  console.log('Drag change event:', event);
-
-  // event.added: element was added to this folder from another folder
-  // event.moved: element was reordered within this folder
-  // event.removed: element was removed from this folder to another
-
   if (event.added) {
-    // An item was moved into this folder from another folder
     const movedItem = event.added.element;
-    console.log('Item added to folder:', movedItem.name, 'to', props.node.name);
 
-    // Emit event to parent to handle the cross-folder move
-    emit('move-node', {
-      sourceId: movedItem.id,
-      sourcePath: movedItem.path,
-      sourceType: movedItem.type,
-      sourceName: movedItem.name,
-      targetId: props.node.id,
-      targetPath: props.node.path,
-      newIndex: event.added.newIndex
-    });
-  } else if (event.moved) {
-    // An item was reordered within this folder
-    console.log('Item reordered within folder:', props.node.name);
-    // For now, we just log it. The order change is already reflected in node.children
-    // When user hits "apply", we can process this reordering if needed
+    // Check if we have multiple items to drag (from handleDragStart)
+    if (draggedItems.value.length > 1) {
+      // Remove all selected items from their parent folders (except the one vuedraggable already moved)
+      const rootNode = getRootNode();
+      draggedItems.value.forEach((draggedNode, index) => {
+        if (index > 0) {
+          // Find and remove from parent
+          removeNodeFromTree(rootNode, draggedNode.id);
+          // Add to target folder
+          if (!props.node.children.find(child => child.id === draggedNode.id)) {
+            props.node.children.splice(event.added.newIndex + index, 0, draggedNode);
+          }
+        }
+
+        // Emit move event for all items
+        emit('move-node', {
+          sourceId: draggedNode.id,
+          sourcePath: draggedNode.path,
+          sourceType: draggedNode.type,
+          sourceName: draggedNode.name,
+          targetId: props.node.id,
+          targetPath: props.node.path,
+          newIndex: event.added.newIndex
+        });
+      });
+      // Clear selection after moving
+      clearSelection();
+    } else {
+      // Single item move
+      emit('move-node', {
+        sourceId: movedItem.id,
+        sourcePath: movedItem.path,
+        sourceType: movedItem.type,
+        sourceName: movedItem.name,
+        targetId: props.node.id,
+        targetPath: props.node.path,
+        newIndex: event.added.newIndex
+      });
+    }
   }
+}
+
+// Helper function to find a node by ID in a tree
+function findNodeById(nodes, id) {
+  if (!nodes) return null;
+  for (const node of nodes) {
+    if (node.id === id) return node;
+    if (node.children) {
+      const found = findNodeById(node.children, id);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+function findNodeInTree(rootNode, id) {
+  if (!rootNode) return null;
+  if (rootNode.id === id) return rootNode;
+  return findNodeById(rootNode.children, id);
+}
+
+function removeNodeFromTree(rootNode, nodeId) {
+  if (!rootNode || !rootNode.children) return false;
+
+  // Try to remove from this node's children
+  const index = rootNode.children.findIndex(child => child.id === nodeId);
+  if (index !== -1) {
+    rootNode.children.splice(index, 1);
+    return true;
+  }
+
+  // Recursively try to remove from child folders
+  for (const child of rootNode.children) {
+    if (child.type === 'folder' && removeNodeFromTree(child, nodeId)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 // Load thumbnail when component mounts if it's an image
@@ -178,8 +279,10 @@ if (isImage()) {
   loadImageThumbnail();
 }
 
-function handleClick() {
-  selected.value = true;
+function handleClick(event) {
+  // Support Shift + Click for multi-select
+  const shiftKey = event.shiftKey;
+  toggleSelection(props.node.id, shiftKey);
   emit('select', props.node);
 }
 
@@ -224,7 +327,8 @@ function formatSize(bytes) {
 
 <style scoped>
 .node-selected {
-  background-color: rgba(25, 118, 210, 0.08);
+  background-color: rgba(25, 118, 210, 0.15);
+  border-left: 3px solid #1976d2;
 }
 
 .chevron-spacer {
@@ -258,9 +362,26 @@ function formatSize(bytes) {
   cursor: grabbing;
 }
 
-/* vuedraggable ghost class for dragging visual feedback */
+/* vuedraggable classes */
+:deep(.sortable-chosen) {
+  opacity: 0.6 !important;
+  background: rgba(25, 118, 210, 0.15) !important;
+  cursor: grabbing !important;
+}
+
 :deep(.sortable-ghost) {
-  opacity: 0.5;
-  background: rgba(25, 118, 210, 0.1);
+  opacity: 0.3 !important;
+  background: rgba(25, 118, 210, 0.1) !important;
+}
+
+.ghost {
+  opacity: 0.4 !important;
+  background: rgba(25, 118, 210, 0.15) !important;
+}
+
+.dragging {
+  cursor: grabbing !important;
+  transform: scale(1.02);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 </style>

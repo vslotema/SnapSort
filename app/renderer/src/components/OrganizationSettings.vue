@@ -577,11 +577,6 @@ async function generateStructure() {
   aiProgress.value = { step: 0, message: 'Starting...', progress: 0 };
 
   try {
-    console.log('🚀 Starting AI Organization');
-    console.log('Priority tags:', tags.value);
-    console.log('Tag threshold:', tagThreshold.value);
-    console.log('Cluster count:', clusterCount.value);
-
     // Call AI organization API
     const result = await window.snapSortAPI.organizeWithAI(
       tags.value,
@@ -590,7 +585,6 @@ async function generateStructure() {
     );
 
     if (result.success) {
-      console.log('✅ Organization complete:', result.stats);
 
       // Store result for preview
       organizationResult.value = result;

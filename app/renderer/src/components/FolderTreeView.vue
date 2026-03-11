@@ -47,10 +47,36 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, provide } from 'vue';
 import TreeNode from './TreeNode.vue';
 import OrganizationSettings from './OrganizationSettings.vue';
 import { useAppStore } from '../stores/app';
+
+// Multi-select state - provide to all child TreeNodes
+const selectedNodes = ref(new Set());
+const draggedItems = ref([]); // Shared across all TreeNode instances
+
+provide('selectedNodes', selectedNodes);
+provide('draggedItems', draggedItems);
+provide('rootNodeRef', () => props.rootNode);
+provide('toggleSelection', (nodeId, ctrlKey) => {
+  if (ctrlKey) {
+    if (selectedNodes.value.has(nodeId)) {
+      selectedNodes.value.delete(nodeId);
+    } else {
+      selectedNodes.value.add(nodeId);
+    }
+  } else {
+    selectedNodes.value.clear();
+    selectedNodes.value.add(nodeId);
+  }
+  // Trigger reactivity
+  selectedNodes.value = new Set(selectedNodes.value);
+});
+provide('clearSelection', () => {
+  selectedNodes.value.clear();
+  selectedNodes.value = new Set(selectedNodes.value);
+});
 
 const props = defineProps({
   rootNode: {
@@ -61,11 +87,6 @@ const props = defineProps({
 
 const appStore = useAppStore();
 const showOrganizeDialog = ref(false);
-
-function handleSelect(node) {
-  console.log('Selected node:', node);
-  // Emit to parent or handle selection
-}
 
 function openOrganizeDialog() {
   showOrganizeDialog.value = true;
@@ -84,7 +105,6 @@ async function handleOrganizationApplied() {
         // Update the store with the new folder structure
         appStore.setRootNode(result.rootNode);
         appStore.setStats(result.stats);
-        console.log('Folder structure refreshed after organization');
       }
     } catch (error) {
       console.error('Error rescanning folder:', error);
@@ -111,7 +131,6 @@ async function handleMoveNode(moveData) {
       }
     });
 
-    console.log(`Queued move: ${moveData.sourceName} -> ${moveData.targetPath}`);
   } catch (error) {
     console.error('Error queuing move action:', error);
     alert(`Error: ${error.message}`);
@@ -131,7 +150,6 @@ async function applyAllChanges() {
         if (scanResult.success) {
           appStore.setRootNode(scanResult.rootNode);
           appStore.setStats(scanResult.stats);
-          console.log('All changes applied successfully');
         }
       }
     } else {

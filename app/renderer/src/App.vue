@@ -108,14 +108,12 @@ async function scanFolder(folderPath) {
 
   try {
     const result = await window.snapSortAPI.scanFolder(folderPath);
-    console.log("result", result);
 
     if (result.success) {
       stats.value = result.stats;
       appStore.setRootNode(result.rootNode);
       appStore.setRootFolder(folderPath);
       appStore.setStats(result.stats);
-      console.log("Root node:", appStore.rootNode);
     }
   } catch (error) {
     console.error('Scan error:', error);
