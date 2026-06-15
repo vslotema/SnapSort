@@ -4,7 +4,8 @@ import path from 'path';
 
 export default defineConfig({
   plugins: [vue()],
-  root: path.join(__dirname, 'app/renderer'),
+  base: './',
+ root: 'app/renderer', // Tell Vite to use app/renderer as root
   build: {
     outDir: path.join(__dirname, 'app/renderer/dist'),
     emptyOutDir: true
