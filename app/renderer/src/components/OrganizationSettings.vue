@@ -373,7 +373,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, toRaw } from 'vue';
 import { useAppStore } from '../stores/app';
 
 const props = defineProps({
@@ -383,7 +383,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['close', 'organization-applied']);
+const emit = defineEmits(['close', 'create-preview']);
 
 const appStore = useAppStore();
 
@@ -492,48 +492,6 @@ onMounted(() => {
   });
 });
 
-function buildPreviewTree(actions) {
-  // Build a hierarchical tree structure from the move actions
-  const tree = {};
-
-  actions.forEach(action => {
-    if (action.type === 'move') {
-      const newPath = action.params.newPath;
-      const pathParts = newPath.split('/');
-      const fileName = pathParts.pop();
-
-      // Build folder hierarchy
-      let currentLevel = tree;
-      pathParts.forEach((folder, index) => {
-        // Skip root path parts, only show relative structure
-        if (index < pathParts.length - 3) return; // Skip base path, keep last 2-3 levels
-
-        if (!currentLevel[folder]) {
-          currentLevel[folder] = {
-            name: folder,
-            type: 'folder',
-            children: {},
-            files: [],
-            metadata: action.metadata
-          };
-        }
-        currentLevel = currentLevel[folder].children;
-      });
-
-      // Add file to the last folder
-      const lastFolder = pathParts[pathParts.length - 1];
-      if (tree[lastFolder]) {
-        tree[lastFolder].files.push({
-          name: fileName,
-          metadata: action.metadata
-        });
-      }
-    }
-  });
-
-  return tree;
-}
-
 async function applyOrganization() {
   try {
     const result = await window.snapSortAPI.applyChanges();
@@ -575,30 +533,18 @@ function getFolderColor(folder) {
 async function generateStructure() {
   organizing.value = true;
   aiProgress.value = { step: 0, message: 'Starting...', progress: 0 };
-
+  const cleanTags = structuredClone(toRaw(tags.value))
   try {
     // Call AI organization API
     const result = await window.snapSortAPI.organizeWithAI(
-      tags.value,
+      cleanTags,
       tagThreshold.value,
       clusterCount.value
     );
 
     if (result.success) {
-
-      // Store result for preview
-      organizationResult.value = result;
-
-      // Build preview structure tree from actions
-      previewStructure.value = buildPreviewTree(result.actions);
-
-      // Add all actions to the engine
-      for (const action of result.actions) {
-        await window.snapSortAPI.addAction(action);
-      }
-
-      // Show preview dialog
-      showPreview.value = true;
+      emit('create-preview', result);
+      emit('close');
     } else {
       console.error('Organization failed:', result.error);
       alert(`❌ Organization failed:\n\n${result.error}`);

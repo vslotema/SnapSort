@@ -4,11 +4,12 @@
   "description": "AI-powered file organizer with non-destructive preview",
   "main": "app/main/index.js",
   "scripts": {
-    "dev": "vite dev app/renderer & NODE_ENV=development electron app/main/index.js",
-    "build": "vite build && electron-builder",
-    "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && electron app/main/index.js\"",
-    "electron:build": "npm run build && electron-builder"
+    "dev": "concurrently -k \"vite\" \"wait-on http://localhost:5173 && cross-env NODE_ENV=development electronmon app/main/index.js\"",
+    "ai:dev": "ai-service/venv/bin/uvicorn main:app --app-dir ai-service --host 127.0.0.1 --port 8000 --reload",
+    "dev:all": "concurrently -k \"npm run ai:dev\" \"npm run dev\"",
+    "build": "vite build && electron-builder"
   },
+
   "keywords": [
     "electron",
     "vue",

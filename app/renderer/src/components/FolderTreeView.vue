@@ -16,7 +16,8 @@
     <v-card-text class="pa-0 tree-container">
       <v-list v-if="rootNode" density="compact" class="pa-0">
         <tree-node 
-          :node="draggedItems" 
+          :key="(isPreviewMode ? previewTree : rootNode)?.id"
+          :node="isPreviewMode ? previewTree : rootNode"
           :level="0" 
           @move-node="handleMoveNode" 
           @drag-start="isDragging = true"
@@ -62,7 +63,8 @@ import { useAppStore } from '../stores/app';
 const selectedNodes = ref(new Set());
 const draggedItems = ref([]); // Shared across all TreeNode instances
 const isDragging = ref(false);
-const previewStructure = ref(null);
+const isPreviewMode = ref(false);
+const previewTree = ref([]);
 const organizationResult = ref(null);
 
 provide('selectedNodes', selectedNodes);
@@ -100,20 +102,23 @@ const showOrganizeDialog = ref(false);
 watch(
   () => props.rootNode,
   (newVal) => {
-    console.log('rootNode changed:', newVal)
-    if (newVal) draggedItems.value = newVal;
+    console.log('rootNode changed:', newVal);
+    // Don't set draggedItems here — it's only for drag tracking
+    // draggedItems is used internally in TreeNode for multi-select drag state
   },
   { immediate: true }
 )
+
 function openOrganizeDialog() {
   showOrganizeDialog.value = true;
 }
-
 async function handleCreatePreview(result) {
+  console.log('Received organization result:', result);
   // Store result for preview
   organizationResult.value = result;
-  draggedItems.value = buildPreviewTree(result.actions);
-
+  previewTree.value = buildPreviewTree(result.actions);
+  console.log('Preview tree built:', previewTree.value);
+  isPreviewMode.value = true;
   // Add all actions to the engine
   for (const action of result.actions) {
     await window.snapSortAPI.addAction(action);
@@ -142,6 +147,7 @@ async function handleOrganizationApplied() {
 }
 
 function buildPreviewTree(actions) {
+  console.log('Building preview tree with actions:', actions);
   const normalize = p => p.replace(/\\/g, '/').replace(/\/+$/, '');
   const base = normalize(appStore.rootFolder);
 

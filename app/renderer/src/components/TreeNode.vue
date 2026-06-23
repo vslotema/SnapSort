@@ -56,7 +56,7 @@
           variant="text"
           class="text-caption"
         >
-          {{ node.children.length }}
+          {{ node.children.length }} items
         </v-chip>
         <v-chip
           v-else-if="node.size"
@@ -90,6 +90,8 @@
           :level="level + 1"
           @select="$emit('select', $event)"
           @move-node="$emit('move-node', $event)"
+          @drag-start="$emit('drag-start')"
+          @drag-end="$emit('drag-end')"
         />
       </template>
     </draggable>
@@ -118,7 +120,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['select', 'move-node']);
+const emit = defineEmits(['select', 'move-node', 'drag-start', 'drag-end']);
 
 const expanded = ref(props.level === 0); // Auto-expand root level
 const imageError = ref(false);
@@ -137,9 +139,9 @@ function isImage() {
 
 async function loadImageThumbnail() {
   if (!isImage() || !props.node.path) return;
-
+  const thumbnailPath = props.node.oldPath || props.node.path; // Use oldPath if available
   try {
-    const result = await window.snapSortAPI.getImageThumbnail(props.node.path);
+    const result = await window.snapSortAPI.getImageThumbnail(thumbnailPath);
     if (result.success) {
       imageSrc.value = result.dataUrl;
     } else {
@@ -181,11 +183,15 @@ function handleDragStart(event) {
     // Single item drag
     draggedItems.value = [draggedNode];
   }
+  emit('drag-start');
 }
 
 function handleDragEnd(event) {
-  // Clear dragged items after drop
-  draggedItems.value = [];
+  // Delay clearing to avoid DOM removal during cleanup
+  setTimeout(() => {
+    draggedItems.value = [];
+    emit('drag-end');
+  }, 100);
 }
 
 // Drag and drop handler for vuedraggable

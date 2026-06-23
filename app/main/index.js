@@ -1,4 +1,5 @@
 const { app, BrowserWindow, dialog, ipcMain } = require('electron');
+const { default: installExtension, VUEJS_DEVTOOLS } = require('electron-devtools-installer');
 const path = require('path');
 const axios = require('axios');
 
@@ -12,6 +13,7 @@ let mainWindow;
 const scanner = new FileScanner();
 const engine = new OrganizationEngine();
 const committer = new FileSystemCommitter();
+const AI_BASE_URL = 'http://127.0.0.1:8000';
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -24,29 +26,24 @@ function createWindow() {
     }
   });
 
-  // In development, load from Vite dev server
-  if (process.env.NODE_ENV === 'development') {
+  const isDev = !app.isPackaged;
+
+  if (isDev) {
     mainWindow.loadURL('http://localhost:5173');
     mainWindow.webContents.openDevTools();
   } else {
     mainWindow.loadFile(path.join(__dirname, '../renderer/dist/index.html'));
   }
+
 }
 
 app.whenReady().then(async () => {
   console.log('SnapSort starting...');
   console.log('Registered extractors:', extractorRegistry.getSupportedMimeTypes().length);
+  installExtension(VUEJS_DEVTOOLS)
+    .then((name) => console.log(`Added Extension: ${name}`))
+    .catch((err) => console.log('An error occurred: ', err));
 
-  // Install Vue DevTools in development
-  if (process.env.NODE_ENV === 'development') {
-    try {
-      const { default: installExtension, VUEJS_DEVTOOLS } = require('electron-devtools-installer');
-      await installExtension(VUEJS_DEVTOOLS);
-      console.log('Vue DevTools installed successfully');
-    } catch (err) {
-      console.error('Failed to install Vue DevTools:', err);
-    }
-  }
 
   createWindow();
 });
@@ -324,7 +321,7 @@ ipcMain.handle('ai:organize', async (event, { tags, tagThreshold, clusterCount }
     // Step 2: Match files to priority tags (if any)
     const taggedFiles = new Set();
     const tagActions = [];
-
+ 
     if (tags && tags.length > 0) {
       console.log(`Step 2: Matching files to ${tags.length} priority tags...`);
       event.sender.send('ai-progress', { step: 2, message: 'Matching priority tags...', progress: 30 });
@@ -396,12 +393,12 @@ async function generateEmbeddings(files, event) {
       // Call AI service based on content type
       let embedding;
       if (extracted.type === 'image') {
-        const response = await axios.post('http://localhost:8000/embed/image', {
+        const response = await axios.post(`${AI_BASE_URL}/embed/image`, {
           image_path: file.path
         }, { timeout: 5000 });
         embedding = response.data.embedding;
       } else if (extracted.type === 'text') {
-        const response = await axios.post('http://localhost:8000/embed/text', {
+        const response = await axios.post(`${AI_BASE_URL}/embed/text`, {
           text: extracted.content.substring(0, 1000) // Limit text length
         }, { timeout: 5000 });
         embedding = response.data.embedding;
@@ -433,7 +430,7 @@ async function matchFilesToTags(files, tags, embeddings, threshold, event) {
   const tagEmbeddings = new Map();
   for (const tag of tags) {
     try {
-      const response = await axios.post('http://localhost:8000/embed/text', {
+      const response = await axios.post(`${AI_BASE_URL}/embed/text`, {
         text: tag.name
       }, { timeout: 5000 });
       tagEmbeddings.set(tag.name, response.data.embedding);
@@ -455,6 +452,7 @@ async function matchFilesToTags(files, tags, embeddings, threshold, event) {
       if (!tagEmbedding) continue;
 
       const similarity = cosineSimilarity(fileEmbedding, tagEmbedding);
+      console.log(`Similarity between "${file.name}" and tag "${tag.name}": ${similarity.toFixed(4)}`);
       if (similarity > bestSimilarity && similarity >= threshold) {
         bestSimilarity = similarity;
         bestTag = tag;
@@ -491,6 +489,7 @@ async function matchFilesToTags(files, tags, embeddings, threshold, event) {
  * Helper: Cluster untagged files
  */
 async function clusterFiles(files, embeddings, clusterCount, event) {
+  console.log('clusterCount', clusterCount);
   // Get embeddings for untagged files
   const fileEmbeddings = files
     .map(f => ({ file: f, embedding: embeddings.get(f.id) }))
@@ -502,7 +501,6 @@ async function clusterFiles(files, embeddings, clusterCount, event) {
 
   // Simple K-Means clustering
   const clusters = kMeansClustering(fileEmbeddings, Math.min(clusterCount, fileEmbeddings.length));
-
   // Create move actions for each cluster
   const actions = [];
   clusters.forEach((clusterFiles, clusterIndex) => {
@@ -541,6 +539,7 @@ async function generateClusterNames(clusterActions, event) {
     }
     clusterGroups.get(clusterId).push(action);
   });
+  console.log('clusterGroups', clusterGroups);
 
   // Generate names for each cluster
   for (const [clusterId, actions] of clusterGroups.entries()) {
@@ -550,13 +549,16 @@ async function generateClusterNames(clusterActions, event) {
       return fileNode ? fileNode.name : '';
     }).filter(n => n);
 
+    console.log('sampleNames', sampleNames);
+
     try {
       // Call AI to generate descriptive name
-      const response = await axios.post('http://localhost:8000/generate-cluster-name', {
-        file_names: sampleNames
-      }, { timeout: 5000 });
+      // const response = await axios.post(`${AI_BASE_URL}/generate-cluster-name`, {
+      //   file_names: sampleNames
+      // }, { timeout: 5000 });
+      // TO DO: fix generate-cluster-name endpoint in Python service then use response.data.cluster_name
 
-      const aiName = response.data.cluster_name || `AI-Cluster-${clusterId + 1}`;
+      const aiName = `AI-Cluster-${clusterId + 1}`;
 
       // Update all actions in this cluster with new folder name
       actions.forEach(action => {
