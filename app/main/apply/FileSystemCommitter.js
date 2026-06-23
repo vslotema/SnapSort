@@ -91,15 +91,15 @@ class FileSystemCommitter {
    * @private
    */
   async _executeMove(action) {
-    const { originalPath, newPath } = action.params;
+    const { oldPath, newPath } = action.params;
 
     // Ensure destination directory exists
     await fs.mkdir(path.dirname(newPath), { recursive: true });
 
     // Move file
-    await fs.rename(originalPath, newPath);
+    await fs.rename(oldPath, newPath);
 
-    console.log(`Moved: ${originalPath} -> ${newPath}`);
+    console.log(`Moved: ${oldPath} -> ${newPath}`);
   }
 
   /**
@@ -107,12 +107,12 @@ class FileSystemCommitter {
    * @private
    */
   async _executeRename(action) {
-    const { originalPath, newName } = action.params;
-    const newPath = path.join(path.dirname(originalPath), newName);
+    const { oldPath, newName } = action.params;
+    const newPath = path.join(path.dirname(oldPath), newName);
 
-    await fs.rename(originalPath, newPath);
+    await fs.rename(oldPath, newPath);
 
-    console.log(`Renamed: ${originalPath} -> ${newPath}`);
+    console.log(`Renamed: ${oldPath} -> ${newPath}`);
   }
 
   /**

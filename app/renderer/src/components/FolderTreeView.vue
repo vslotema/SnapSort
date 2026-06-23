@@ -102,9 +102,8 @@ const showOrganizeDialog = ref(false);
 watch(
   () => props.rootNode,
   (newVal) => {
-    console.log('rootNode changed:', newVal);
-    // Don't set draggedItems here — it's only for drag tracking
-    // draggedItems is used internally in TreeNode for multi-select drag state
+    isPreviewMode.value = false;
+    previewTree.value = [];
   },
   { immediate: true }
 )
