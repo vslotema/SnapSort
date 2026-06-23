@@ -1,7 +1,7 @@
 <template>
   <v-card flat height="100%" class="d-flex flex-column flex-fill">
     <v-card-title class="d-flex align-center justify-space-between">
-      <span>Folder Structure</span>
+      <span>Preview Folder Structure</span>
       <v-btn
         color="primary"
         variant="flat"
@@ -15,7 +15,13 @@
     <v-divider></v-divider>
     <v-card-text class="pa-0 tree-container">
       <v-list v-if="rootNode" density="compact" class="pa-0">
-        <tree-node :node="rootNode" :level="0" @select="handleSelect" @move-node="handleMoveNode" />
+        <tree-node 
+          :node="draggedItems" 
+          :level="0" 
+          @move-node="handleMoveNode" 
+          @drag-start="isDragging = true"
+          @drag-end="isDragging = false"
+        />
       </v-list>
       <div v-else class="text-center pa-8">
         <vue-feather type="folder" size="48" stroke="lightgrey"></vue-feather>
@@ -41,13 +47,13 @@
     <OrganizationSettings
       :show="showOrganizeDialog"
       @close="showOrganizeDialog = false"
-      @organization-applied="handleOrganizationApplied"
+      @create-preview="handleCreatePreview"
     />
   </v-card>
 </template>
 
 <script setup>
-import { ref, provide } from 'vue';
+import { ref, provide, watch} from 'vue';
 import TreeNode from './TreeNode.vue';
 import OrganizationSettings from './OrganizationSettings.vue';
 import { useAppStore } from '../stores/app';
@@ -55,6 +61,9 @@ import { useAppStore } from '../stores/app';
 // Multi-select state - provide to all child TreeNodes
 const selectedNodes = ref(new Set());
 const draggedItems = ref([]); // Shared across all TreeNode instances
+const isDragging = ref(false);
+const previewStructure = ref(null);
+const organizationResult = ref(null);
 
 provide('selectedNodes', selectedNodes);
 provide('draggedItems', draggedItems);
@@ -88,8 +97,28 @@ const props = defineProps({
 const appStore = useAppStore();
 const showOrganizeDialog = ref(false);
 
+watch(
+  () => props.rootNode,
+  (newVal) => {
+    console.log('rootNode changed:', newVal)
+    if (newVal) draggedItems.value = newVal;
+  },
+  { immediate: true }
+)
 function openOrganizeDialog() {
   showOrganizeDialog.value = true;
+}
+
+async function handleCreatePreview(result) {
+  // Store result for preview
+  organizationResult.value = result;
+  draggedItems.value = buildPreviewTree(result.actions);
+
+  // Add all actions to the engine
+  for (const action of result.actions) {
+    await window.snapSortAPI.addAction(action);
+  }
+
 }
 
 async function handleOrganizationApplied() {
@@ -112,6 +141,91 @@ async function handleOrganizationApplied() {
   }
 }
 
+function buildPreviewTree(actions) {
+  const normalize = p => p.replace(/\\/g, '/').replace(/\/+$/, '');
+  const base = normalize(appStore.rootFolder);
+
+  // Deep clone the original root to preserve all metadata
+  const root = JSON.parse(JSON.stringify(props.rootNode));
+
+  // Build a map of all original files by id for quick lookup
+  const filesById = new Map();
+  const collectFiles = (node) => {
+    if (node.type === 'file') filesById.set(node.id, node);
+    if (node.children) node.children.forEach(collectFiles);
+  };
+  collectFiles(root);
+
+  // Clear children — we'll rebuild from actions
+  root.children = [];
+
+  // Helper: find or create a folder by path
+  const getOrCreateFolder = (folderPath, parentNode) => {
+    const parts = normalize(folderPath).replace(base + '/', '').split('/').filter(Boolean);
+    let currentNode = parentNode;
+    let currentPath = base;
+
+    for (const folderName of parts) {
+      currentPath = `${currentPath}/${folderName}`;
+      let child = currentNode.children.find(c => c.name === folderName && c.type === 'folder');
+      if (!child) {
+        child = {
+          id: `folder-${currentPath.replace(/\//g, '-')}`,
+          path: currentPath,
+          name: folderName,
+          type: 'folder',
+          children: [],
+          parentId: currentNode.id,
+          created: new Date().toISOString(),
+          modified: new Date().toISOString()
+        };
+        currentNode.children.push(child);
+      }
+      currentNode = child;
+    }
+    return currentNode;
+  };
+
+  // Apply each action
+  for (const action of actions) {
+    if (action.type !== 'move') continue;
+
+    const fileNode = filesById.get(action.fileId);
+    if (!fileNode) {
+      console.warn(`File not found for action:`, action);
+      continue;
+    }
+
+    // Parse new path
+    let newPath = normalize(action.params.newPath);
+    if (!newPath.startsWith(base + '/')) {
+      console.warn(`newPath not under rootPath:`, newPath);
+      continue;
+    }
+
+    const relPath = newPath.slice(base.length + 1);
+    const parts = relPath.split('/').filter(Boolean);
+    const fileName = parts.pop();
+
+    // Get or create target folder
+    const targetFolder = parts.length > 0
+      ? getOrCreateFolder(parts.join('/'), root)
+      : root;
+
+    // Add file to target folder with updated path/parentId
+    targetFolder.children.push({
+      ...fileNode,
+      path: newPath,
+      oldPath: fileNode.path,
+      parentId: targetFolder.id
+    });
+  }
+
+  return root;
+}
+
+
+
 async function handleMoveNode(moveData) {
   // Construct the new path by joining target folder path with the source name
   const newPath = `${moveData.targetPath}/${moveData.sourceName}`;
@@ -122,7 +236,7 @@ async function handleMoveNode(moveData) {
       type: 'move',
       fileId: moveData.sourceId,
       params: {
-        originalPath: moveData.sourcePath,
+        oldPath: moveData.sourcePath,
         newPath: newPath
       },
       metadata: {
