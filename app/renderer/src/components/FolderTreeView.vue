@@ -64,7 +64,6 @@ import { useAppStore } from '../stores/app';
 const selectedNodes = ref(new Set());
 const draggedItems = ref([]); // Shared across all TreeNode instances
 const isDragging = ref(false);
-const originalRoot = ref(null); // Store the original root node for comparison
 const isPreviewMode = ref(false);
 const previewTree = ref([]);
 const organizationResult = ref(null);
@@ -100,18 +99,6 @@ const props = defineProps({
 
 const appStore = useAppStore();
 const showOrganizeDialog = ref(false);
-
-watch(
-  () => props.rootNode,
-  (newVal) => {
-    console.log('watch originalRoot.value', originalRoot.value);
-    if (!originalRoot.value) {
-      console.log('here')
-      originalRoot.value = JSON.parse(JSON.stringify(newVal));
-    }
-  },
-  { immediate: true }
-)
 
 const hasChanges = computed(() => {
   return appStore.actions?.length > 0 || isPreviewMode.value;
@@ -277,7 +264,6 @@ async function applyAllChanges() {
       if (rootFolder) {
         const scanResult = await window.snapSortAPI.scanFolder(rootFolder);
         if (scanResult.success) {
-          originalRoot.value = JSON.parse(JSON.stringify(scanResult.rootNode));
           appStore.setRootNode(scanResult.rootNode);
           appStore.setStats(scanResult.stats);
           appStore.clearActions();
