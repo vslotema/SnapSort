@@ -36,6 +36,7 @@
       color="success"
       size="large"
       class="apply-changes-btn"
+      :disabled="!hasChanges"
       @click="applyAllChanges"
       rounded="pill"
       elevation="4"
@@ -54,7 +55,7 @@
 </template>
 
 <script setup>
-import { ref, provide, watch} from 'vue';
+import { ref, provide, watch, computed} from 'vue';
 import TreeNode from './TreeNode.vue';
 import OrganizationSettings from './OrganizationSettings.vue';
 import { useAppStore } from '../stores/app';
@@ -63,6 +64,7 @@ import { useAppStore } from '../stores/app';
 const selectedNodes = ref(new Set());
 const draggedItems = ref([]); // Shared across all TreeNode instances
 const isDragging = ref(false);
+const originalRoot = ref(null); // Store the original root node for comparison
 const isPreviewMode = ref(false);
 const previewTree = ref([]);
 const organizationResult = ref(null);
@@ -102,11 +104,18 @@ const showOrganizeDialog = ref(false);
 watch(
   () => props.rootNode,
   (newVal) => {
-    isPreviewMode.value = false;
-    previewTree.value = [];
+    console.log('watch originalRoot.value', originalRoot.value);
+    if (!originalRoot.value) {
+      console.log('here')
+      originalRoot.value = JSON.parse(JSON.stringify(newVal));
+    }
   },
   { immediate: true }
 )
+
+const hasChanges = computed(() => {
+  return appStore.actions?.length > 0 || isPreviewMode.value;
+});
 
 function openOrganizeDialog() {
   showOrganizeDialog.value = true;
@@ -237,7 +246,7 @@ async function handleMoveNode(moveData) {
 
   try {
     // Queue the move action (don't apply yet)
-    await window.snapSortAPI.addAction({
+    const action = {
       type: 'move',
       fileId: moveData.sourceId,
       params: {
@@ -248,8 +257,9 @@ async function handleMoveNode(moveData) {
         reason: 'manual_drag_drop',
         newIndex: moveData.newIndex
       }
-    });
-
+    };
+    await window.snapSortAPI.addAction(action);
+    appStore.addAction(action);
   } catch (error) {
     console.error('Error queuing move action:', error);
     alert(`Error: ${error.message}`);
@@ -267,8 +277,12 @@ async function applyAllChanges() {
       if (rootFolder) {
         const scanResult = await window.snapSortAPI.scanFolder(rootFolder);
         if (scanResult.success) {
+          originalRoot.value = JSON.parse(JSON.stringify(scanResult.rootNode));
           appStore.setRootNode(scanResult.rootNode);
           appStore.setStats(scanResult.stats);
+          appStore.clearActions();
+          previewTree.value = null;
+          isPreviewMode.value = false;
         }
       }
     } else {
