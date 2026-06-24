@@ -193,7 +193,6 @@ ipcMain.handle('extract-files', async (event, fileIds) => {
 ipcMain.handle('add-action', async (event, actionData) => {
   try {
     const action = engine.addAction(actionData);
-    console.log(`Action added: ${action.type} for ${action.fileId}`);
     return {
       success: true,
       action
@@ -221,6 +220,10 @@ ipcMain.handle('reset-actions', async () => {
   engine.reset();
   committer.clearHistory();
   return { success: true };
+});
+
+ipcMain.handle('get-actions', async () => {
+  return engine.getActions();
 });
 
 /**

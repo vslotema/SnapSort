@@ -11,6 +11,8 @@ contextBridge.exposeInMainWorld('snapSortAPI', {
   // Preview state
   getPreviewState: () => ipcRenderer.invoke('get-preview-state'),
 
+  getActions: () => ipcRenderer.invoke('get-actions'),
+
   // Image thumbnails
   getImageThumbnail: (filePath) => ipcRenderer.invoke('get-image-thumbnail', filePath),
 
