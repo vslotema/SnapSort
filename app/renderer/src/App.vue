@@ -1,6 +1,6 @@
 <template>
   <v-app>
-    <v-app-bar color="primary" dark class="app-header">
+    <v-app-bar color="primary" dark class="app-header" elevation="0">
       <vue-feather type="star" size="24" class="ml-4"></vue-feather>
       <v-toolbar-title class="ml-3">SnapSort</v-toolbar-title>
       <v-spacer></v-spacer>

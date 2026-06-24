@@ -12,6 +12,7 @@ export const useAppStore = defineStore('app', () => {
   const previewTree = ref([]);
   const actions = ref([]);
   const selectedNodes = ref(new Set());
+  const aiProgress = ref(false);
 
   function setRootFolder(folder) {
     rootFolder.value = folder;
@@ -73,6 +74,10 @@ export const useAppStore = defineStore('app', () => {
     return selectedNodes.value.has(nodeId);
   }
 
+  function setAIProgress(value) {
+    aiProgress.value = value;
+  }
+
   return {
     rootFolder,
     rootNode,
@@ -80,6 +85,8 @@ export const useAppStore = defineStore('app', () => {
     previewTree,
     actions,
     selectedNodes,
+    aiProgress,
+    setAIProgress,
     setRootFolder,
     setRootNode,
     setStats,

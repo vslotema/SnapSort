@@ -31,18 +31,31 @@
     </v-card-text>
 
     <!-- Fixed Apply Changes Button -->
-    <v-btn
-      v-if="rootNode"
-      color="success"
+      <v-btn
+      v-if="rootNode && hasChanges"
+      color="grey-darken-2"
+      variant="outlined"
+      class="cancel-changes-btn"
       size="large"
-      class="apply-changes-btn"
-      :disabled="!hasChanges"
-      @click="applyAllChanges"
+      elevation="0"
       rounded="pill"
-      elevation="4"
+      @click="applyAllChanges"
     >
-      <vue-feather type="check" size="20" class="mr-2"></vue-feather>
-      Apply Changes
+      Cancel
+    </v-btn>
+    <v-btn
+      v-if="rootNode && hasChanges"
+      color="success"
+      class="apply-changes-btn"
+      size="large"
+      elevation="0"
+      rounded="pill"
+      @click="applyAllChanges"
+    >
+    <template #prepend>
+      <vue-feather type="check-circle" size="20"></vue-feather>
+    </template>
+      Save
     </v-btn>
 
     <!-- Organization Settings Dialog -->
@@ -279,6 +292,14 @@ async function applyAllChanges() {
     alert(`Error: ${error.message}`);
   }
 }
+
+function cancelOrganization() {
+  // Reset actions
+  window.snapSortAPI.resetActions();
+  isPreviewMode.value = false;
+  organizationResult.value = null;
+  previewTree.value = null;
+}
 </script>
 
 <style scoped>
@@ -287,14 +308,21 @@ async function applyAllChanges() {
   overflow-y: auto;
 }
 
+.cancel-changes-btn {
+  position: fixed;
+  bottom: 24px;
+  right: 145px;
+  z-index: 100;
+  font-weight: 600;
+  text-transform: none;
+}
+
 .apply-changes-btn {
   position: fixed;
   bottom: 24px;
   right: 24px;
   z-index: 100;
-  padding: 12px 32px !important;
   font-weight: 600;
   text-transform: none;
-  letter-spacing: 0.5px;
 }
 </style>
