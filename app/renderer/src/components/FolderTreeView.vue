@@ -13,7 +13,8 @@
       </v-btn>
     </v-card-title>
     <v-divider></v-divider>
-    <v-card-text class="pa-0 tree-container">
+    <SkeletonTreeLoader v-if="appStore.aiProgress" />
+    <v-card-text v-else class="pa-0 tree-container">
       <v-list v-if="rootNode" density="compact" class="pa-0">
         <tree-node 
           :key="(isPreviewMode ? previewTree : rootNode)?.id"
@@ -70,6 +71,7 @@
 <script setup>
 import { ref, provide, watch, computed} from 'vue';
 import TreeNode from './TreeNode.vue';
+import SkeletonTreeLoader from './SkeletonTreeLoader.vue';
 import OrganizationSettings from './OrganizationSettings.vue';
 import { useAppStore } from '../stores/app';
 
