@@ -492,27 +492,6 @@ onMounted(() => {
   });
 });
 
-async function applyOrganization() {
-  try {
-    const result = await window.snapSortAPI.applyChanges();
-    if (result.success) {
-      showPreview.value = false;
-      alert(`✅ Applied ${result.applied} changes successfully!\n\nYour files have been organized.`);
-
-      // Clear data
-      organizationResult.value = null;
-      previewStructure.value = null;
-
-      // Emit event to parent to refresh folder structure
-      emit('organization-applied');
-      emit('close');
-    }
-  } catch (error) {
-    console.error('Apply error:', error);
-    alert(`❌ Error applying changes:\n\n${error.message}`);
-  }
-}
-
 function cancelOrganization() {
   // Reset actions
   window.snapSortAPI.resetActions();
