@@ -328,6 +328,7 @@ function getExampleStructure() {
 
 async function generateStructure() {
   appStore.setAIProgress(true);
+  emit('close');
   const cleanTags = structuredClone(toRaw(tags.value))
   try {
     // Call AI organization API
@@ -336,20 +337,24 @@ async function generateStructure() {
       tagThreshold.value,
       clusterCount.value
     );
+ 
 
     if (result.success) {
-      emit('create-preview', result);
-      emit('close');
+      setTimeout(() => {
+         emit('create-preview', result);
+         appStore.setAIProgress(false);
+      }, 5000); // Slight delay to ensure UI updates
+    
     } else {
+      appStore.setAIProgress(false);
       console.error('Organization failed:', result.error);
       alert(`❌ Organization failed:\n\n${result.error}`);
     }
   } catch (error) {
     console.error('Organization error:', error);
     alert(`❌ Error during organization:\n\n${error.message}`);
-  } finally {
     appStore.setAIProgress(false);
-  }
+  } 
 }
 </script>
 

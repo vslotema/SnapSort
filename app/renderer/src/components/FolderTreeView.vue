@@ -13,7 +13,7 @@
       </v-btn>
     </v-card-title>
     <v-divider></v-divider>
-    <SkeletonTreeLoader v-if="appStore.aiProgress" />
+    <SkeletonTreeLoader v-if="showSkeletonLoader" />
     <v-card-text v-else class="pa-0 tree-container">
       <v-list v-if="rootNode" density="compact" class="pa-0">
         <tree-node 
@@ -82,6 +82,10 @@ const isDragging = ref(false);
 const isPreviewMode = ref(false);
 const previewTree = ref([]);
 const organizationResult = ref(null);
+const appStore = useAppStore();
+const showOrganizeDialog = ref(false);
+const delayedAiProgress = ref(false);
+let timeoutId = null;
 
 provide('selectedNodes', selectedNodes);
 provide('draggedItems', draggedItems);
@@ -112,12 +116,26 @@ const props = defineProps({
   }
 });
 
-const appStore = useAppStore();
-const showOrganizeDialog = ref(false);
-
 const hasChanges = computed(() => {
   return appStore.actions?.length > 0 || isPreviewMode.value;
 });
+
+const showSkeletonLoader = computed(() => {
+  return delayedAiProgress.value;
+});
+
+watch(() => appStore.aiProgress, (newVal) => {
+  clearTimeout(timeoutId); 
+
+  if (newVal) {
+    timeoutId = setTimeout(() => {
+      delayedAiProgress.value = true;
+    }, 200); 
+  } else {
+    delayedAiProgress.value = false;
+  }
+}, { immediate: true });
+
 
 function openOrganizeDialog() {
   showOrganizeDialog.value = true;
@@ -157,7 +175,7 @@ async function handleOrganizationApplied() {
 }
 
 function buildPreviewTree(actions) {
-  console.log('Building preview tree with actions:', actions);
+
   const normalize = p => p.replace(/\\/g, '/').replace(/\/+$/, '');
   const base = normalize(appStore.rootFolder);
 
