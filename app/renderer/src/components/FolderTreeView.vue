@@ -39,7 +39,7 @@
       size="large"
       elevation="0"
       rounded="pill"
-      @click="applyAllChanges"
+      @click="cancelOrganization"
     >
       Cancel
     </v-btn>
