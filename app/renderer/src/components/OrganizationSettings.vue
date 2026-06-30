@@ -140,7 +140,7 @@
                 <vue-feather type="menu" size="16" class="mr-2 text-grey cursor-move"></vue-feather>
                 <vue-feather :type="getTagIcon(tag.type)" size="16" class="mr-2"></vue-feather>
                 <span class="flex-grow-1">{{ tag.name }}</span>
-                <v-chip size="x-small" variant="text">Level {{ index + 1 }}</v-chip>
+                <v-chip size="x-small" variant="text">Level 1</v-chip>
               </div>
             </v-card>
 
@@ -337,14 +337,10 @@ async function generateStructure() {
       tagThreshold.value,
       clusterCount.value
     );
- 
 
     if (result.success) {
-      setTimeout(() => {
-         emit('create-preview', result);
-         appStore.setAIProgress(false);
-      }, 5000); // Slight delay to ensure UI updates
-    
+      emit('create-preview', result);
+      appStore.setAIProgress(false);
     } else {
       appStore.setAIProgress(false);
       console.error('Organization failed:', result.error);
@@ -421,5 +417,10 @@ code {
   background: rgba(0, 0, 0, 0.02);
   border-radius: 4px;
   border-left: 3px solid #2196F3;
+}
+
+:deep(.v-slide-group__next),
+:deep(.v-slide-group__prev) {
+  display: none !important;
 }
 </style>

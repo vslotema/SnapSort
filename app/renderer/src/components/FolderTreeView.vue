@@ -51,6 +51,8 @@
       size="large"
       elevation="0"
       rounded="pill"
+      :loading="isApplying"
+      :disabled="isApplying"
       @click="applyAllChanges"
     >
     <template #prepend>
@@ -86,6 +88,7 @@ const appStore = useAppStore();
 const showOrganizeDialog = ref(false);
 const delayedAiProgress = ref(false);
 let timeoutId = null;
+const isApplying = ref(false);
 
 provide('selectedNodes', selectedNodes);
 provide('draggedItems', draggedItems);
@@ -288,6 +291,7 @@ async function handleMoveNode(moveData) {
 
 async function applyAllChanges() {
   try {
+    isApplying.value = true;
     // Apply all queued changes to the file system
     const result = await window.snapSortAPI.applyChanges();
 
@@ -310,6 +314,8 @@ async function applyAllChanges() {
   } catch (error) {
     console.error('Error applying changes:', error);
     alert(`Error: ${error.message}`);
+  } finally {
+    isApplying.value = false;
   }
 }
 
