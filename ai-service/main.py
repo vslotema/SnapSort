@@ -4,6 +4,11 @@ from pydantic import BaseModel
 from typing import List, Optional
 import torch
 import logging
+from PIL import Image
+import numpy as np
+from pathlib import Path
+from transformers import CLIPProcessor, CLIPModel
+from clip_embedder import CLIPEmbedder 
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -22,6 +27,7 @@ app.add_middleware(
 
 # Global variables for models
 clip_model = None
+clip_embedder = None
 text_model = None
 device = None
 
@@ -39,27 +45,15 @@ class GenerateClusterNameRequest(BaseModel):
 
 @app.on_event("startup")
 async def load_models():
-    """Load AI models on startup"""
-    global clip_model, text_model, device
-
+    global clip_embedder, text_model, device
     try:
         logger.info("Loading models...")
         device = "cuda" if torch.cuda.is_available() else "cpu"
         logger.info(f"Using device: {device}")
 
-        # TODO: Load CLIP for images
-        # import open_clip
-        # clip_model, _, preprocess = open_clip.create_model_and_transforms(
-        #     'ViT-B-32', pretrained='laion2b_s34b_b79k'
-        # )
-        # clip_model = clip_model.to(device)
+        clip_embedder = CLIPEmbedder()  
 
-        # TODO: Load Sentence Transformer for text
-        # from sentence_transformers import SentenceTransformer
-        # text_model = SentenceTransformer('all-MiniLM-L6-v2')
-        # text_model = text_model.to(device)
-
-        logger.info("Models loaded successfully (stub mode)")
+        logger.info("Models loaded successfully")
     except Exception as e:
         logger.error(f"Error loading models: {e}")
         raise
@@ -85,21 +79,23 @@ async def health():
 async def embed_image(request: EmbedImageRequest):
     """Generate embedding for image"""
     try:
-        # TODO: Implement CLIP embedding
-        # For now, return mock embedding
-        import numpy as np
-        mock_embedding = np.random.rand(512).tolist()
+        if clip_embedder is None:
+            raise RuntimeError("CLIP model not loaded")
+
+        vec = clip_embedder.embed_image(request.image_path)
+        embedding = vec.tolist()
 
         return {
             "success": True,
-            "embedding": mock_embedding,
-            "model": "CLIP-ViT-B-32",
-            "dimension": len(mock_embedding)
+            "embedding": embedding,
+            "model": clip_embedder.model_name,
+            "dimension": len(embedding),
         }
     except Exception as e:
         logger.error(f"Error embedding image: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+    
 @app.post("/embed/text")
 async def embed_text(request: EmbedTextRequest):
     """Generate embedding for text"""
