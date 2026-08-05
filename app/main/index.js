@@ -277,16 +277,40 @@ ipcMain.handle('rollback-changes', async (event, count) => {
  */
 ipcMain.handle('ai:embed', async (event, { fileId, content, type }) => {
   try {
-    // TODO: Call Python AI service via HTTP
-    // For now, return mock embedding
-    const mockEmbedding = new Array(512).fill(0).map(() => Math.random());
+    let response;
 
-    engine.storeEmbedding(fileId, mockEmbedding, 'mock');
+    if (type === 'image') {
+      // content is expected to be a local file path
+      response = await axios.post(`${AI_BASE_URL}/embed/image`, {
+        image_path: content,
+      });
+      console.log('RESPONSE FROM AI SERVICE:', response.data);
+    } else if (type === 'text') {
+      // content is the text string
+      response = await axios.post(`${AI_BASE_URL}/embed/text`, {
+        text: content,
+      });
+    } else {
+      throw new Error(`Unknown embed type: ${type}`);
+    }
+
+    const data = response.data;
+
+    if (!data.success) {
+      throw new Error(data.error || 'Embedding failed');
+    }
+
+    const embedding = data.embedding;
+
+    // store in your engine (using the real model name)
+    engine.storeEmbedding(fileId, embedding, data.model);
 
     return {
       success: true,
       fileId,
-      embedding: mockEmbedding
+      embedding,
+      model: data.model,
+      dimension: data.dimension,
     };
   } catch (error) {
     return {
@@ -295,7 +319,6 @@ ipcMain.handle('ai:embed', async (event, { fileId, content, type }) => {
     };
   }
 });
-
 /**
  * AI Organization - Main workflow
  */
@@ -401,6 +424,7 @@ async function generateEmbeddings(files, event) {
           image_path: file.path
         }, { timeout: 5000 });
         embedding = response.data.embedding;
+       
       } else if (extracted.type === 'text') {
         const response = await axios.post(`${AI_BASE_URL}/embed/text`, {
           text: extracted.content.substring(0, 1000) // Limit text length
@@ -493,7 +517,6 @@ async function matchFilesToTags(files, tags, embeddings, threshold, event) {
  * Helper: Cluster untagged files
  */
 async function clusterFiles(files, embeddings, clusterCount, event) {
-  console.log('clusterCount', clusterCount);
   // Get embeddings for untagged files
   const fileEmbeddings = files
     .map(f => ({ file: f, embedding: embeddings.get(f.id) }))
@@ -557,10 +580,11 @@ async function generateClusterNames(clusterActions, event) {
 
     try {
       // Call AI to generate descriptive name
-      // const response = await axios.post(`${AI_BASE_URL}/generate-cluster-name`, {
-      //   file_names: sampleNames
-      // }, { timeout: 5000 });
-      // TO DO: fix generate-cluster-name endpoint in Python service then use response.data.cluster_name
+      const response = await axios.post(`${AI_BASE_URL}/generate-cluster-name`, {
+        file_names: sampleNames
+      }, { timeout: 5000 });
+     
+      console.log('Response from AI service for cluster name:', response.data);
 
       const aiName = `AI-Cluster-${clusterId + 1}`;
 
@@ -606,17 +630,7 @@ function kMeansClustering(items, k, maxIterations = 10) {
 
   const dim = items[0].embedding.length;
 
-  // Initialize centroids randomly
-  let centroids = [];
-  const usedIndices = new Set();
-  while (centroids.length < k) {
-    const idx = Math.floor(Math.random() * items.length);
-    if (!usedIndices.has(idx)) {
-      centroids.push([...items[idx].embedding]);
-      usedIndices.add(idx);
-    }
-  }
-
+  let centroids = kMeansPlusPlusInit(items, k);
   let clusters = [];
 
   for (let iter = 0; iter < maxIterations; iter++) {
@@ -654,6 +668,41 @@ function kMeansClustering(items, k, maxIterations = 10) {
 
   return clusters.filter(c => c.length > 0);
 }
+
+function kMeansPlusPlusInit(items, k) {
+  const centroids = [];
+  
+  // Pick first centroid randomly
+  centroids.push([...items[Math.floor(Math.random() * items.length)].embedding]);
+  
+  // Pick remaining centroids
+  for (let i = 1; i < k; i++) {
+    const distances = items.map(item => {
+      // Find distance to nearest existing centroid
+      return Math.min(...centroids.map(c => euclideanDistance(item.embedding, c)));
+    });
+    
+    // Square the distances for probability distribution
+    const squaredDistances = distances.map(d => d * d);
+    const sumSquared = squaredDistances.reduce((a, b) => a + b, 0);
+    
+    // Weighted random selection
+    let rand = Math.random() * sumSquared;
+    let idx = 0;
+    for (let j = 0; j < squaredDistances.length; j++) {
+      rand -= squaredDistances[j];
+      if (rand <= 0) {
+        idx = j;
+        break;
+      }
+    }
+    
+    centroids.push([...items[idx].embedding]);
+  }
+  
+  return centroids;
+}
+
 
 /**
  * Helper: Calculate Euclidean distance
